@@ -23,42 +23,20 @@ if (-not (Test-Path $LogPath)) {
     exit
 }
 
-# ---- Firmas internas (estrictas, reales)
+# ---- Firmas internas de hacks
 $HackSignatures = @{
-    "Meteor Client" = @(
-        "meteordevelopment.meteorclient",
-        "meteor-client.mixins"
-    )
-    "LiquidBounce" = @(
-        "net.ccbluex.liquidbounce",
-        "liquidbounce.mixins"
-    )
-    "Wurst Client" = @(
-        "net.wurstclient",
-        "wurst.mixins"
-    )
-    "Impact Client" = @(
-        "impactclient",
-        "impact.mixins"
-    )
-    "Aristois Client" = @(
-        "aristois",
-        "aristois.mixin"
-    )
-    "Prestige Client" = @(
-        "prestigeclient",
-        "prestige.mixin"
-    )
-    "Doomsday Client" = @(
-        "doomsday",
-        "doomsday.mixin"
-    )
+    "Meteor Client" = @("meteordevelopment.meteorclient","meteor-client.mixins")
+    "LiquidBounce" = @("net.ccbluex.liquidbounce","liquidbounce.mixins")
+    "Wurst Client" = @("net.wurstclient","wurst.mixins")
+    "Impact Client" = @("impactclient","impact.mixins")
+    "Aristois Client" = @("aristois","aristois.mixin")
+    "Prestige Client" = @("prestigeclient","prestige.mixin")
+    "Doomsday Client" = @("doomsday","doomsday.mixin")
 }
 
-# ---- Cargar solo la sesión actual (adaptado a versiones modernas)
-# Busca varias posibles líneas que indican inicio de sesión
+# ---- Detectar inicio de sesión moderno
 $Lines = Get-Content $LogPath -ErrorAction SilentlyContinue
-$SessionStart = ($Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting" | Select-Object -Last 1).LineNumber
+$SessionStart = ($Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting|Preparing run|Initializing game" | Select-Object -Last 1).LineNumber
 
 if (-not $SessionStart) {
     Write-Host "Unable to determine session start. Ensure Minecraft is fully open." -ForegroundColor Yellow
@@ -70,13 +48,9 @@ $Findings = @()
 
 foreach ($Client in $HackSignatures.Keys) {
     $Evidence = @()
-
     foreach ($Sig in $HackSignatures[$Client]) {
-        if ($RuntimeLines -match $Sig) {
-            $Evidence += $Sig
-        }
+        if ($RuntimeLines -match $Sig) { $Evidence += $Sig }
     }
-
     if ($Evidence.Count -ge 2) {
         $Findings += [PSCustomObject]@{
             Client = $Client
@@ -85,7 +59,7 @@ foreach ($Client in $HackSignatures.Keys) {
     }
 }
 
-# ---- Resultados
+# ---- Mostrar resultados
 Write-Host "[ SESSION STATUS ]" -ForegroundColor Yellow
 Write-Host "Minecraft instance detected and analyzed.`n"
 
@@ -98,13 +72,11 @@ if ($Findings.Count -eq 0) {
     Write-Host "`nNo cheat clients were loaded in this Minecraft instance."
 } else {
     Write-Host "[ HACK CLIENTS LOADED IN THIS SESSION ]" -ForegroundColor Red
-
     foreach ($F in $Findings) {
         Write-Host "`nCLIENT : $($F.Client)" -ForegroundColor Red
         Write-Host "STATUS : CONFIRMED (Loaded in runtime)"
-        Write-Host "NOTE   : Hack was loaded in memory; file may have been renamed or deleted" -ForegroundColor DarkYellow
-
-        $i = 1
+        Write-Host "NOTE   : Hack loaded in memory; file may have been renamed or deleted" -ForegroundColor DarkYellow
+        $i=1
         foreach ($E in $F.Evidence) {
             Write-Host "`nEVIDENCE $i"
             Write-Host "- Type  : Internal Runtime Signature"
@@ -114,7 +86,6 @@ if ($Findings.Count -eq 0) {
             $i++
         }
     }
-
     Write-Host "`n[ SESSION SUMMARY ]" -ForegroundColor Yellow
     Write-Host "Hack clients loaded : $($Findings.Count)"
     Write-Host "False-risk level    : NONE"
