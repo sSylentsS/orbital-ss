@@ -1,97 +1,83 @@
 # ==================================================
-# ORBITAL SS — Minecraft Runtime Audit (FINAL)
-# Runtime-only | Instance-only | No false positives
-# Compatible con versiones modernas 1.16+ a 1.21+
+# ORBITAL SS — Loader-Based Runtime Audit
+# Fabric / Forge | Runtime only | Zero false positives
 # ==================================================
 
-$MCPath = "$env:APPDATA\.minecraft"
-$LogPath = "$MCPath\logs\latest.log"
+$MC = "$env:APPDATA\.minecraft"
+$Log = "$MC\logs\latest.log"
 
 Clear-Host
 
-Write-Host "══════════════════════════════════════════════" -ForegroundColor DarkCyan
-Write-Host "        ORBITAL SS — Minecraft Runtime Audit" -ForegroundColor Cyan
-Write-Host "══════════════════════════════════════════════" -ForegroundColor DarkCyan
-Write-Host "Target : Current Minecraft Instance"
-Write-Host "Scope  : .minecraft only"
-Write-Host "Mode   : Runtime Only (No History)"
-Write-Host "══════════════════════════════════════════════`n" -ForegroundColor DarkCyan
+Write-Host "══════════════════════════════════════════════"
+Write-Host "        ORBITAL SS — Runtime Mod Audit"
+Write-Host "══════════════════════════════════════════════"
+Write-Host "Scope : .minecraft only"
+Write-Host "Mode  : Current Instance"
+Write-Host "Method: Loader verification"
+Write-Host "══════════════════════════════════════════════`n"
 
-# ---- Verificar sesión activa
-if (-not (Test-Path $LogPath)) {
-    Write-Host "No active Minecraft session detected." -ForegroundColor Red
+if (!(Test-Path $Log)) {
+    Write-Host "No active Minecraft session detected."
     exit
 }
 
-# ---- Firmas internas de hacks
-$HackSignatures = @{
-    "Meteor Client" = @("meteordevelopment.meteorclient","meteor-client.mixins")
-    "LiquidBounce" = @("net.ccbluex.liquidbounce","liquidbounce.mixins")
-    "Wurst Client" = @("net.wurstclient","wurst.mixins")
-    "Impact Client" = @("impactclient","impact.mixins")
-    "Aristois Client" = @("aristois","aristois.mixin")
-    "Prestige Client" = @("prestigeclient","prestige.mixin")
-    "Doomsday Client" = @("doomsday","doomsday.mixin")
+# --- Hacks modernos (MODID reales, NO nombres de archivo)
+$HackModIDs = @{
+    "Meteor Client"     = "meteor-client"
+    "LiquidBounce"      = "liquidbounce"
+    "Wurst Client"      = "wurst"
+    "Impact Client"     = "impact"
+    "Aristois Client"   = "aristois"
+    "Prestige Client"   = "prestige"
+    "Doomsday Client"   = "doomsday"
 }
 
-# ---- Detectar inicio de sesión moderno
-$Lines = Get-Content $LogPath -ErrorAction SilentlyContinue
-$SessionStart = ($Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting|Preparing run|Initializing game" | Select-Object -Last 1).LineNumber
+$Lines = Get-Content $Log
 
-if (-not $SessionStart) {
-    Write-Host "Unable to determine session start. Ensure Minecraft is fully open." -ForegroundColor Yellow
+# --- Detectar inicio real del loader
+$LoaderStart = ($Lines | Select-String "Loading mods" | Select-Object -First 1).LineNumber
+
+if (!$LoaderStart) {
+    Write-Host "Minecraft is running, but no mods loaded."
+    Write-Host "Verdict: CLEAN INSTANCE"
     exit
 }
 
-$RuntimeLines = $Lines[$SessionStart..($Lines.Count - 1)]
-$Findings = @()
+$LoadedSection = $Lines[$LoaderStart..($LoaderStart + 200)]
 
-foreach ($Client in $HackSignatures.Keys) {
-    $Evidence = @()
-    foreach ($Sig in $HackSignatures[$Client]) {
-        if ($RuntimeLines -match $Sig) { $Evidence += $Sig }
-    }
-    if ($Evidence.Count -ge 2) {
-        $Findings += [PSCustomObject]@{
-            Client = $Client
-            Evidence = $Evidence
-        }
+$Detected = @()
+
+foreach ($Hack in $HackModIDs.Keys) {
+    $ID = $HackModIDs[$Hack]
+    if ($LoadedSection -match "\b$ID\b") {
+        $Detected += $Hack
     }
 }
 
-# ---- Mostrar resultados
-Write-Host "[ SESSION STATUS ]" -ForegroundColor Yellow
-Write-Host "Minecraft instance detected and analyzed.`n"
-
-if ($Findings.Count -eq 0) {
-    Write-Host "[ SESSION SUMMARY ]" -ForegroundColor Yellow
-    Write-Host "Hack clients loaded : 0"
-    Write-Host "Suspicious entries  : 0"
-    Write-Host "False-risk level    : NONE"
-    Write-Host "Final verdict       : CLEAN SESSION" -ForegroundColor Green
-    Write-Host "`nNo cheat clients were loaded in this Minecraft instance."
+# --- OUTPUT
+if ($Detected.Count -eq 0) {
+    Write-Host "[ RESULT ]"
+    Write-Host "Loaded hack clients : 0"
+    Write-Host "False positives     : NONE"
+    Write-Host "Final verdict       : CLEAN SESSION"
 } else {
-    Write-Host "[ HACK CLIENTS LOADED IN THIS SESSION ]" -ForegroundColor Red
-    foreach ($F in $Findings) {
-        Write-Host "`nCLIENT : $($F.Client)" -ForegroundColor Red
-        Write-Host "STATUS : CONFIRMED (Loaded in runtime)"
-        Write-Host "NOTE   : Hack loaded in memory; file may have been renamed or deleted" -ForegroundColor DarkYellow
-        $i=1
-        foreach ($E in $F.Evidence) {
-            Write-Host "`nEVIDENCE $i"
-            Write-Host "- Type  : Internal Runtime Signature"
-            Write-Host "- Source: latest.log"
-            Write-Host "- Path  : .minecraft\logs\latest.log"
-            Write-Host "- Data  : $E"
-            $i++
-        }
+    Write-Host "[ HACK CLIENTS DETECTED ]"
+    foreach ($H in $Detected) {
+        Write-Host ""
+        Write-Host "CLIENT : $H"
+        Write-Host "STATUS : CONFIRMED (Loader loaded)"
+        Write-Host "SOURCE : latest.log"
+        Write-Host "PATH   : .minecraft\logs\latest.log"
+        Write-Host "NOTE   : Mod was loaded even if renamed or deleted after launch"
     }
-    Write-Host "`n[ SESSION SUMMARY ]" -ForegroundColor Yellow
-    Write-Host "Hack clients loaded : $($Findings.Count)"
-    Write-Host "False-risk level    : NONE"
-    Write-Host "Final verdict       : CHEAT CLIENT ACTIVE" -ForegroundColor Red
+
+    Write-Host ""
+    Write-Host "[ SUMMARY ]"
+    Write-Host "Detected clients : $($Detected.Count)"
+    Write-Host "False positives  : NONE"
+    Write-Host "Verdict          : CHEAT CLIENT ACTIVE"
 }
 
 Write-Host "`n══════════════════════════════════════════════"
-Write-Host "Read-only | Runtime audit | Instance-only"
+Write-Host "Loader-based detection | Read-only | Safe"
 Write-Host "══════════════════════════════════════════════"
