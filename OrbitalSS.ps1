@@ -1,6 +1,7 @@
 # ==================================================
-# ORBITAL SS — Minecraft Runtime Audit
+# ORBITAL SS — Minecraft Runtime Audit (FINAL)
 # Runtime-only | Instance-only | No false positives
+# Compatible con versiones modernas 1.16+ a 1.21+
 # ==================================================
 
 $MCPath = "$env:APPDATA\.minecraft"
@@ -54,12 +55,13 @@ $HackSignatures = @{
     )
 }
 
-# ---- Cargar solo la sesión actual
+# ---- Cargar solo la sesión actual (adaptado a versiones modernas)
+# Busca varias posibles líneas que indican inicio de sesión
 $Lines = Get-Content $LogPath -ErrorAction SilentlyContinue
-$SessionStart = ($Lines | Select-String "Starting Minecraft" | Select-Object -Last 1).LineNumber
+$SessionStart = ($Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting" | Select-Object -Last 1).LineNumber
 
 if (-not $SessionStart) {
-    Write-Host "Unable to determine session start." -ForegroundColor Yellow
+    Write-Host "Unable to determine session start. Ensure Minecraft is fully open." -ForegroundColor Yellow
     exit
 }
 
@@ -100,6 +102,7 @@ if ($Findings.Count -eq 0) {
     foreach ($F in $Findings) {
         Write-Host "`nCLIENT : $($F.Client)" -ForegroundColor Red
         Write-Host "STATUS : CONFIRMED (Loaded in runtime)"
+        Write-Host "NOTE   : Hack was loaded in memory; file may have been renamed or deleted" -ForegroundColor DarkYellow
 
         $i = 1
         foreach ($E in $F.Evidence) {
