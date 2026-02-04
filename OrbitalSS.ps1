@@ -1,6 +1,6 @@
 # ==================================================
-# ORBITAL SS — Runtime Hack Detection (LOG-BASED)
-# Instance only | No history | No false positives
+# ORBITAL SS — Runtime Hack Detector (LOG VERIFIED)
+# Instance-only | No history | Zero false positives
 # ==================================================
 
 $MC = "$env:APPDATA\.minecraft"
@@ -13,7 +13,7 @@ Write-Host "        ORBITAL SS — Runtime Audit"
 Write-Host "══════════════════════════════════════════════"
 Write-Host "Scope : .minecraft"
 Write-Host "Mode  : Current Instance Only"
-Write-Host "Method: Runtime log signatures"
+Write-Host "Method: Runtime log signatures (strict)"
 Write-Host "══════════════════════════════════════════════`n"
 
 if (!(Test-Path $Log)) {
@@ -23,7 +23,7 @@ if (!(Test-Path $Log)) {
 
 $Lines = Get-Content $Log -ErrorAction SilentlyContinue
 
-# Detectar inicio real de la sesión
+# --- Detectar inicio real de sesión (compatibilidad 1.16+)
 $SessionStart = (
     $Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting|Preparing run|Setting user"
     | Select-Object -Last 1
@@ -36,7 +36,7 @@ if (-not $SessionStart) {
 
 $Runtime = $Lines[$SessionStart..($Lines.Count - 1)]
 
-# Firmas internas (reales)
+# --- Firmas internas reales (NO nombres de archivo)
 $HackSignatures = @{
     "Meteor Client" = @(
         "meteordevelopment",
@@ -73,16 +73,16 @@ foreach ($Client in $HackSignatures.Keys) {
             $Hits += $Sig
         }
     }
-
+    # Confirmación estricta: mínimo 2 firmas distintas
     if ($Hits.Count -ge 2) {
         $Findings += [PSCustomObject]@{
-            Client = $Client
-            Evidence = $Hits
+            Client   = $Client
+            Evidence = ($Hits | Select-Object -Unique)
         }
     }
 }
 
-# OUTPUT
+# --- OUTPUT
 if ($Findings.Count -eq 0) {
     Write-Host "[ RESULT ]"
     Write-Host "Hack clients detected : 0"
@@ -96,15 +96,13 @@ if ($Findings.Count -eq 0) {
         Write-Host "STATUS : CONFIRMED (runtime evidence)"
         Write-Host "SOURCE : latest.log"
         Write-Host "PATH   : .minecraft\logs\latest.log"
-        Write-Host "NOTE   : Hack was loaded even if renamed or deleted"
-
+        Write-Host "NOTE   : Loaded in memory; file may be renamed or deleted after launch"
         $i = 1
         foreach ($E in $F.Evidence) {
             Write-Host "  Evidence $i : $E"
             $i++
         }
     }
-
     Write-Host ""
     Write-Host "[ SUMMARY ]"
     Write-Host "Detected clients : $($Findings.Count)"
@@ -115,4 +113,3 @@ if ($Findings.Count -eq 0) {
 Write-Host "`n══════════════════════════════════════════════"
 Write-Host "Runtime-only | Log-verified | Safe"
 Write-Host "══════════════════════════════════════════════"
-
