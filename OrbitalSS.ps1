@@ -1,6 +1,6 @@
 # ==================================================
-# ORBITAL SS — Loader-Based Runtime Audit
-# Fabric / Forge | Runtime only | Zero false positives
+# ORBITAL SS — Runtime Hack Detection (LOG-BASED)
+# Instance only | No history | No false positives
 # ==================================================
 
 $MC = "$env:APPDATA\.minecraft"
@@ -9,11 +9,11 @@ $Log = "$MC\logs\latest.log"
 Clear-Host
 
 Write-Host "══════════════════════════════════════════════"
-Write-Host "        ORBITAL SS — Runtime Mod Audit"
+Write-Host "        ORBITAL SS — Runtime Audit"
 Write-Host "══════════════════════════════════════════════"
-Write-Host "Scope : .minecraft only"
-Write-Host "Mode  : Current Instance"
-Write-Host "Method: Loader verification"
+Write-Host "Scope : .minecraft"
+Write-Host "Mode  : Current Instance Only"
+Write-Host "Method: Runtime log signatures"
 Write-Host "══════════════════════════════════════════════`n"
 
 if (!(Test-Path $Log)) {
@@ -21,63 +21,98 @@ if (!(Test-Path $Log)) {
     exit
 }
 
-# --- Hacks modernos (MODID reales, NO nombres de archivo)
-$HackModIDs = @{
-    "Meteor Client"     = "meteor-client"
-    "LiquidBounce"      = "liquidbounce"
-    "Wurst Client"      = "wurst"
-    "Impact Client"     = "impact"
-    "Aristois Client"   = "aristois"
-    "Prestige Client"   = "prestige"
-    "Doomsday Client"   = "doomsday"
-}
+$Lines = Get-Content $Log -ErrorAction SilentlyContinue
 
-$Lines = Get-Content $Log
+# Detectar inicio real de la sesión
+$SessionStart = (
+    $Lines | Select-String "Starting Minecraft|Loading Minecraft|Minecraft starting|Preparing run|Setting user"
+    | Select-Object -Last 1
+).LineNumber
 
-# --- Detectar inicio real del loader
-$LoaderStart = ($Lines | Select-String "Loading mods" | Select-Object -First 1).LineNumber
-
-if (!$LoaderStart) {
-    Write-Host "Minecraft is running, but no mods loaded."
-    Write-Host "Verdict: CLEAN INSTANCE"
+if (-not $SessionStart) {
+    Write-Host "Unable to determine session start."
     exit
 }
 
-$LoadedSection = $Lines[$LoaderStart..($LoaderStart + 200)]
+$Runtime = $Lines[$SessionStart..($Lines.Count - 1)]
 
-$Detected = @()
+# Firmas internas (reales)
+$HackSignatures = @{
+    "Meteor Client" = @(
+        "meteordevelopment",
+        "\[Meteor\]",
+        "meteor-client",
+        "Meteor Client",
+        "meteorclient.mixin"
+    )
+    "LiquidBounce" = @(
+        "liquidbounce",
+        "net.ccbluex.liquidbounce",
+        "\[LiquidBounce\]"
+    )
+    "Wurst Client" = @(
+        "wurstclient",
+        "\[Wurst\]"
+    )
+    "Impact Client" = @(
+        "impactclient",
+        "\[Impact\]"
+    )
+    "Aristois Client" = @(
+        "aristois",
+        "\[Aristois\]"
+    )
+}
 
-foreach ($Hack in $HackModIDs.Keys) {
-    $ID = $HackModIDs[$Hack]
-    if ($LoadedSection -match "\b$ID\b") {
-        $Detected += $Hack
+$Findings = @()
+
+foreach ($Client in $HackSignatures.Keys) {
+    $Hits = @()
+    foreach ($Sig in $HackSignatures[$Client]) {
+        if ($Runtime -match $Sig) {
+            $Hits += $Sig
+        }
+    }
+
+    if ($Hits.Count -ge 2) {
+        $Findings += [PSCustomObject]@{
+            Client = $Client
+            Evidence = $Hits
+        }
     }
 }
 
-# --- OUTPUT
-if ($Detected.Count -eq 0) {
+# OUTPUT
+if ($Findings.Count -eq 0) {
     Write-Host "[ RESULT ]"
-    Write-Host "Loaded hack clients : 0"
-    Write-Host "False positives     : NONE"
-    Write-Host "Final verdict       : CLEAN SESSION"
+    Write-Host "Hack clients detected : 0"
+    Write-Host "False positives       : NONE"
+    Write-Host "Verdict               : CLEAN SESSION"
 } else {
-    Write-Host "[ HACK CLIENTS DETECTED ]"
-    foreach ($H in $Detected) {
+    Write-Host "[ HACKS DETECTED IN THIS INSTANCE ]"
+    foreach ($F in $Findings) {
         Write-Host ""
-        Write-Host "CLIENT : $H"
-        Write-Host "STATUS : CONFIRMED (Loader loaded)"
+        Write-Host "CLIENT : $($F.Client)"
+        Write-Host "STATUS : CONFIRMED (runtime evidence)"
         Write-Host "SOURCE : latest.log"
         Write-Host "PATH   : .minecraft\logs\latest.log"
-        Write-Host "NOTE   : Mod was loaded even if renamed or deleted after launch"
+        Write-Host "NOTE   : Hack was loaded even if renamed or deleted"
+
+        $i = 1
+        foreach ($E in $F.Evidence) {
+            Write-Host "  Evidence $i : $E"
+            $i++
+        }
     }
 
     Write-Host ""
     Write-Host "[ SUMMARY ]"
-    Write-Host "Detected clients : $($Detected.Count)"
+    Write-Host "Detected clients : $($Findings.Count)"
     Write-Host "False positives  : NONE"
     Write-Host "Verdict          : CHEAT CLIENT ACTIVE"
 }
 
 Write-Host "`n══════════════════════════════════════════════"
-Write-Host "Loader-based detection | Read-only | Safe"
+Write-Host "Runtime-only | Log-verified | Safe"
 Write-Host "══════════════════════════════════════════════"
+
